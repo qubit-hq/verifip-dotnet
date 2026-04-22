@@ -28,7 +28,7 @@ public sealed class VerifIPClient : IDisposable
     private readonly bool _ownsHttpClient;
     private readonly JsonSerializerOptions _jsonOptions;
 
-    private RateLimitInfo? _rateLimit;
+    private volatile RateLimitInfo? _rateLimit;
 
     /// <summary>Most recently observed rate limit info.</summary>
     public RateLimitInfo? RateLimit => _rateLimit;
@@ -135,7 +135,7 @@ public sealed class VerifIPClient : IDisposable
             }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
             {
-                lastException = new VerifIPException($"Connection error: {ex.Message}");
+                lastException = new VerifIPException("Connection error: network request failed");
                 if (attempt < _maxRetries)
                 {
                     await DelayAsync(attempt, null, cancellationToken);
@@ -144,49 +144,71 @@ public sealed class VerifIPClient : IDisposable
                 throw lastException;
             }
 
-            // Parse rate limit headers
-            var rateLimitInfo = RateLimitInfo.FromHeaders(response);
-            if (rateLimitInfo != null)
-                _rateLimit = rateLimitInfo;
-
-            if (response.IsSuccessStatusCode)
+            // Ensure response is disposed in all code paths
+            using (response)
             {
+                // Parse rate limit headers
+                var rateLimitInfo = RateLimitInfo.FromHeaders(response);
+                if (rateLimitInfo != null)
+                    _rateLimit = rateLimitInfo;
+
                 var content = await response.Content.ReadAsStringAsync(cancellationToken);
-                return JsonSerializer.Deserialize<T>(content, _jsonOptions)
-                    ?? throw new VerifIPException("Failed to deserialize response");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    if (string.IsNullOrEmpty(content))
+                        throw new VerifIPException("Empty response body from server", 200);
+
+                    try
+                    {
+                        return JsonSerializer.Deserialize<T>(content, _jsonOptions)
+                            ?? throw new VerifIPException("Failed to deserialize response");
+                    }
+                    catch (JsonException ex)
+                    {
+                        throw new VerifIPException($"Invalid JSON response: {ex.Message}", 200);
+                    }
+                }
+
+                // Error response
+                var statusCode = (int)response.StatusCode;
+
+                string errorCode = "";
+                string message = content;
+                int? retryAfter = null;
+
+                try
+                {
+                    using var errorDoc = JsonDocument.Parse(content);
+                    var root = errorDoc.RootElement;
+                    if (root.TryGetProperty("error", out var e)) errorCode = e.GetString() ?? "";
+                    if (root.TryGetProperty("message", out var m)) message = m.GetString() ?? content;
+                    if (root.TryGetProperty("retry_after", out var r))
+                    {
+                        if (r.ValueKind == JsonValueKind.Number)
+                            retryAfter = r.GetInt32();
+                        else if (r.ValueKind == JsonValueKind.String && int.TryParse(r.GetString(), out var seconds))
+                            retryAfter = seconds;
+                    }
+                }
+                catch (JsonException)
+                {
+                    // Non-JSON error body (e.g., HTML from gateway) — truncate for safety
+                    if (message.Length > 200)
+                        message = message[..200] + "...";
+                }
+
+                var exception = CreateException(statusCode, errorCode, message, retryAfter);
+
+                if (RetryableStatusCodes.Contains(statusCode) && attempt < _maxRetries)
+                {
+                    lastException = exception;
+                    await DelayAsync(attempt, retryAfter, cancellationToken);
+                    continue;
+                }
+
+                throw exception;
             }
-
-            // Error response
-            var statusCode = (int)response.StatusCode;
-            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
-
-            string errorCode = "";
-            string message = errorBody;
-            int? retryAfter = null;
-
-            try
-            {
-                var errorDoc = JsonDocument.Parse(errorBody);
-                var root = errorDoc.RootElement;
-                if (root.TryGetProperty("error", out var e)) errorCode = e.GetString() ?? "";
-                if (root.TryGetProperty("message", out var m)) message = m.GetString() ?? errorBody;
-                if (root.TryGetProperty("retry_after", out var r)) retryAfter = r.GetInt32();
-            }
-            catch (JsonException)
-            {
-                // Non-JSON error body — use raw text
-            }
-
-            var exception = CreateException(statusCode, errorCode, message, retryAfter);
-
-            if (RetryableStatusCodes.Contains(statusCode) && attempt < _maxRetries)
-            {
-                lastException = exception;
-                await DelayAsync(attempt, retryAfter, cancellationToken);
-                continue;
-            }
-
-            throw exception;
         }
 
         throw lastException ?? new VerifIPException("Request failed after retries");
