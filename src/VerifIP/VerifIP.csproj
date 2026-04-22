@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
+    <LangVersion>10</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>VerifIP</RootNamespace>
+    <AssemblyName>VerifIP</AssemblyName>
+
+    <!-- NuGet package metadata -->
+    <PackageId>VerifIP</PackageId>
+    <Version>0.1.2</Version>
+    <Authors>Qubit HQ</Authors>
+    <Company>VerifIP</Company>
+    <Description>Official .NET SDK for the VerifIP IP fraud risk scoring API. Detect proxies, VPNs, Tor exits, and datacenter IPs.</Description>
+    <PackageTags>ip;fraud;security;vpn;tor;proxy;verifip</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/qubit-hq/verifip-dotnet</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/qubit-hq/verifip-dotnet</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+    <None Include="../../LICENSE" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+</Project>
