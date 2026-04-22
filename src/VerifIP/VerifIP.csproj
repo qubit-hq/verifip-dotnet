@@ -10,7 +10,7 @@
 
     <!-- NuGet package metadata -->
     <PackageId>VerifIP</PackageId>
-    <Version>0.1.2</Version>
+    <Version>0.1.3</Version>
     <Authors>Qubit HQ</Authors>
     <Company>VerifIP</Company>
     <Description>Official .NET SDK for the VerifIP IP fraud risk scoring API. Detect proxies, VPNs, Tor exits, and datacenter IPs.</Description>
