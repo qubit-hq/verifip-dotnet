@@ -86,6 +86,118 @@ public sealed class VerifIPClient : IDisposable
     }
 
     /// <summary>
+    /// Check a single email address for risk.
+    /// </summary>
+    /// <param name="email">Email address to check.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Email risk assessment with validation flags.</returns>
+    public async Task<EmailResponse> CheckEmailAsync(string email, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            throw new ArgumentException("email is required", nameof(email));
+
+        var encoded = Uri.EscapeDataString(email);
+        return await RequestAsync<EmailResponse>(HttpMethod.Get, $"/v1/check/email?email={encoded}", null, true, cancellationToken);
+    }
+
+    /// <summary>
+    /// Check a phone number for risk.
+    /// </summary>
+    /// <param name="phone">Phone number to check.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Phone risk assessment with validation flags.</returns>
+    public async Task<PhoneResponse> CheckPhoneAsync(string phone, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(phone))
+            throw new ArgumentException("phone is required", nameof(phone));
+
+        var encoded = Uri.EscapeDataString(phone);
+        return await RequestAsync<PhoneResponse>(HttpMethod.Get, $"/v1/check/phone?phone={encoded}", null, true, cancellationToken);
+    }
+
+    /// <summary>
+    /// Check a URL for reputation and threats.
+    /// </summary>
+    /// <param name="url">URL to check.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>URL reputation assessment with threat flags.</returns>
+    public async Task<UrlResponse> CheckUrlAsync(string url, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            throw new ArgumentException("url is required", nameof(url));
+
+        var encoded = Uri.EscapeDataString(url);
+        return await RequestAsync<UrlResponse>(HttpMethod.Get, $"/v1/check/url?url={encoded}", null, true, cancellationToken);
+    }
+
+    /// <summary>
+    /// Perform a WHOIS lookup for an IP address.
+    /// </summary>
+    /// <param name="ip">IPv4 or IPv6 address.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>WHOIS information including network and organization details.</returns>
+    public async Task<WhoisResponse> CheckWhoisAsync(string ip, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(ip))
+            throw new ArgumentException("ip is required", nameof(ip));
+
+        var encoded = Uri.EscapeDataString(ip);
+        return await RequestAsync<WhoisResponse>(HttpMethod.Get, $"/v1/whois?ip={encoded}", null, true, cancellationToken);
+    }
+
+    /// <summary>
+    /// Report an IP address as fraudulent or legitimate.
+    /// </summary>
+    /// <param name="ip">IPv4 or IPv6 address to report.</param>
+    /// <param name="isFraud">Whether the IP is fraudulent.</param>
+    /// <param name="category">Optional fraud category.</param>
+    /// <param name="comment">Optional comment.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Report submission confirmation.</returns>
+    public async Task<ReportResponse> ReportAsync(string ip, bool isFraud, string category = "", string comment = "", CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(ip))
+            throw new ArgumentException("ip is required", nameof(ip));
+
+        var payload = new Dictionary<string, object> { ["ip"] = ip, ["is_fraud"] = isFraud };
+        if (!string.IsNullOrEmpty(category))
+            payload["category"] = category;
+        if (!string.IsNullOrEmpty(comment))
+            payload["comment"] = comment;
+
+        var body = JsonSerializer.Serialize(payload, _jsonOptions);
+        return await RequestAsync<ReportResponse>(HttpMethod.Post, "/v1/report", body, true, cancellationToken);
+    }
+
+    /// <summary>
+    /// Run a unified risk assessment across multiple entity types.
+    /// </summary>
+    /// <param name="ip">Optional IPv4 or IPv6 address.</param>
+    /// <param name="email">Optional email address.</param>
+    /// <param name="phone">Optional phone number.</param>
+    /// <param name="url">Optional URL.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Unified assessment with per-entity results.</returns>
+    public async Task<AssessResponse> AssessAsync(string ip = "", string email = "", string phone = "", string url = "", CancellationToken cancellationToken = default)
+    {
+        var payload = new Dictionary<string, string>();
+        if (!string.IsNullOrEmpty(ip))
+            payload["ip"] = ip;
+        if (!string.IsNullOrEmpty(email))
+            payload["email"] = email;
+        if (!string.IsNullOrEmpty(phone))
+            payload["phone"] = phone;
+        if (!string.IsNullOrEmpty(url))
+            payload["url"] = url;
+
+        if (payload.Count == 0)
+            throw new ArgumentException("At least one parameter (ip, email, phone, or url) is required");
+
+        var body = JsonSerializer.Serialize(payload, _jsonOptions);
+        return await RequestAsync<AssessResponse>(HttpMethod.Post, "/v1/assess", body, true, cancellationToken);
+    }
+
+    /// <summary>
     /// Check multiple IP addresses in a single request. Requires Starter plan or higher.
     /// </summary>
     /// <param name="ips">List of IPs (1-100).</param>
