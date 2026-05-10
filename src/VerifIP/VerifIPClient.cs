@@ -19,7 +19,7 @@ namespace VerifIP;
 /// </example>
 public sealed class VerifIPClient : IDisposable
 {
-    private const string SdkVersion = "0.1.4";
+    private const string SdkVersion = "0.2.0";
     private static readonly int[] RetryableStatusCodes = { 429, 500, 502, 503, 504 };
 
     private readonly HttpClient _httpClient;
